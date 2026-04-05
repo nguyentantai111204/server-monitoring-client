@@ -6,13 +6,14 @@ import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     CircularProgress, Tooltip, IconButton,
 } from '@mui/material'
-import { ArrowBack, ContentCopy } from '@mui/icons-material'
-import { getServerByIdApi, killProcessApi } from '../../apis/servers/servers.api'
-import { getLatestMetricApi } from '../../apis/metrics/metrics.api'
+import { ArrowBack, ContentCopy, SystemUpdateAlt } from '@mui/icons-material'
+import { getServerByIdApi, killProcessApi, updateAgentApi } from '../../apis/servers/servers.api'
+import { getLatestMetricApi, getMetricsApi } from '../../apis/metrics/metrics.api'
 import useSWR from 'swr'
 import { formatRelative, formatPercent, formatBytes, getStatusColor } from '../../common/utils/format.utils'
 import { useAppDispatch } from '../../redux/store.redux'
 import { showSnackbar } from '../../redux/system/system.slice'
+import { MetricChartComponent } from './components/metric-chart.component'
 
 const MetricBar = ({ label, value, color }: { label: string; value: number; color: string }) => (
     <Box mb={2}>
@@ -38,6 +39,7 @@ export const ServerDetailPage = () => {
     const navigate = useNavigate()
     const dispatch = useAppDispatch()
     const [killingPid, setKillingPid] = useState<number | null>(null)
+    const [isUpdating, setIsUpdating] = useState(false)
 
     const { data: server, isLoading: loadingServer, mutate: mutateServer } = useSWR(
         id ? `/servers/${id}` : null,
@@ -51,6 +53,12 @@ export const ServerDetailPage = () => {
     const { data: metric } = useSWR(
         id ? `/metrics/${id}/latest` : null,
         () => getLatestMetricApi(id as string).catch(() => null),
+        { refreshInterval: 10000 }
+    )
+
+    const { data: history } = useSWR(
+        id ? `/metrics/${id}/history` : null,
+        () => getMetricsApi(id as string, { limit: 100 }).then(res => res ? (Array.isArray(res) ? res : res.data) : []),
         { refreshInterval: 10000 }
     )
 
@@ -73,6 +81,19 @@ export const ServerDetailPage = () => {
             dispatch(showSnackbar({ message: `Failed to kill PID ${pid}`, severity: 'error' }))
         } finally {
             setKillingPid(null)
+        }
+    }
+
+    const handleUpdateAgent = async () => {
+        if (!id) return
+        setIsUpdating(true)
+        try {
+            await updateAgentApi(id)
+            dispatch(showSnackbar({ message: 'Update command queued — agent will reinstall within 10s', severity: 'success' }))
+        } catch {
+            dispatch(showSnackbar({ message: 'Failed to queue update command', severity: 'error' }))
+        } finally {
+            setIsUpdating(false)
         }
     }
 
@@ -135,6 +156,21 @@ export const ServerDetailPage = () => {
                                         </Button>
                                     </Box>
                                 </Box>
+                                <Divider />
+                                <Box sx={{ pt: 0.5 }}>
+                                    <Button
+                                        fullWidth
+                                        variant="outlined"
+                                        color="warning"
+                                        size="small"
+                                        startIcon={isUpdating ? <CircularProgress size={14} color="inherit" /> : <SystemUpdateAlt />}
+                                        disabled={isUpdating}
+                                        onClick={handleUpdateAgent}
+                                        sx={{ fontWeight: 600 }}
+                                    >
+                                        {isUpdating ? 'Sending update command...' : 'Update Agent'}
+                                    </Button>
+                                </Box>
                             </Box>
                         </CardContent>
                     </Card>
@@ -182,6 +218,28 @@ export const ServerDetailPage = () => {
                     </Card>
                 </Box>
             </Stack>
+
+            {/* Monitoring Charts */}
+            {history && history.length > 0 && (
+                <Box mt={3}>
+                    <Stack direction={{ xs: 'column', lg: 'row' }} gap={2.5}>
+                        <Box sx={{ flex: 1 }}>
+                            <MetricChartComponent
+                                data={history}
+                                title="System Usage History"
+                                type="usage"
+                            />
+                        </Box>
+                        <Box sx={{ flex: 1 }}>
+                            <MetricChartComponent
+                                data={history}
+                                title="Network Traffic"
+                                type="network"
+                            />
+                        </Box>
+                    </Stack>
+                </Box>
+            )}
 
             {/* Process Manager */}
             <Box mt={3}>
