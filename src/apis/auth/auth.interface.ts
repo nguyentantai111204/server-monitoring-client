@@ -5,6 +5,8 @@ export interface LoginRequest {
 
 export interface LoginResponse {
     user: UserProfile
+    accessToken: string
+    refreshToken: string
 }
 
 export interface UserProfile {
@@ -23,5 +25,6 @@ export interface RegisterRequest {
 }
 
 export interface RefreshTokenResponse {
-    // Server uses httpOnly cookies — no token in body
+    accessToken: string
+    refreshToken: string
 }

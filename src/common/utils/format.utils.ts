@@ -1,14 +1,15 @@
 import dayjs from './dayjs.utils'
 
-export function formatBytes(bytes: number, decimals = 2): string {
-    if (bytes === 0) return '0 B'
+export function formatBytes(bytes: number | undefined | null, decimals = 2): string {
+    if (bytes === undefined || bytes === null || bytes === 0) return '0 B'
     const k = 1024
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`
 }
 
-export function formatPercent(value: number, decimals = 1): string {
+export function formatPercent(value: number | undefined | null, decimals = 1): string {
+    if (value === undefined || value === null) return '0%'
     return `${value.toFixed(decimals)}%`
 }
 

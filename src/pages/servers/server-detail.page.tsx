@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
     Box, Stack, Typography, Card, CardContent, Chip,
@@ -7,8 +6,7 @@ import {
 import { ArrowBack, ContentCopy } from '@mui/icons-material'
 import { getServerByIdApi } from '../../apis/servers/servers.api'
 import { getLatestMetricApi } from '../../apis/metrics/metrics.api'
-import type { Server } from '../../apis/servers/servers.interface'
-import type { Metric } from '../../apis/metrics/metrics.interface'
+import useSWR from 'swr'
 import { formatRelative, formatPercent, formatBytes, getStatusColor } from '../../common/utils/format.utils'
 import { useAppDispatch } from '../../redux/store.redux'
 import { showSnackbar } from '../../redux/system/system.slice'
@@ -36,23 +34,20 @@ export const ServerDetailPage = () => {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const dispatch = useAppDispatch()
-    const [server, setServer] = useState<Server | null>(null)
-    const [metric, setMetric] = useState<Metric | null>(null)
-    const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
-        if (!id) return
-        Promise.all([
-            getServerByIdApi(id),
-            getLatestMetricApi(id).catch(() => null),
-        ])
-            .then(([srv, met]) => {
-                setServer(srv)
-                setMetric(met)
-            })
-            .catch(() => dispatch(showSnackbar({ message: 'Failed to load server data', severity: 'error' })))
-            .finally(() => setLoading(false))
-    }, [id])
+    const { data: server, isLoading: loadingServer } = useSWR(
+        id ? `/servers/${id}` : null, 
+        () => getServerByIdApi(id as string),
+        { onError: () => dispatch(showSnackbar({ message: 'Failed to load server data', severity: 'error' })) }
+    )
+
+    const { data: metric } = useSWR(
+        id ? `/metrics/${id}/latest` : null, 
+        () => getLatestMetricApi(id as string).catch(() => null),
+        { refreshInterval: 10000 }
+    )
+
+    const loading = loadingServer && !server
 
     const copyToken = () => {
         if (!server) return

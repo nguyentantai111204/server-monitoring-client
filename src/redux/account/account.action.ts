@@ -3,8 +3,11 @@ import type { LoginRequest, LoginResponse, RegisterRequest, RefreshTokenResponse
 import type { UserProfile } from '../../apis/users/users.interface'
 import { getProfileApi, loginApi, logoutApi, refreshTokenApi, registerApi } from '@/apis/auth/auth.api'
 
+export const forceLogoutLocal = createAction('account/forceLogoutLocal')
+
 export const logout = createAsyncThunk('account/logout', async (_, { rejectWithValue }) => {
     try {
+        localStorage.removeItem('accessToken')
         await logoutApi()
         return true
     } catch (error: unknown) {
@@ -17,7 +20,11 @@ export const login = createAsyncThunk<LoginResponse, LoginRequest>(
     'account/login',
     async (credentials, { rejectWithValue }) => {
         try {
-            return await loginApi(credentials)
+            const res = await loginApi(credentials)
+            if (res.accessToken) {
+                localStorage.setItem('accessToken', res.accessToken)
+            }
+            return res
         } catch (error: unknown) {
             const err = error as { response?: { data?: { message?: string } }; message?: string }
             return rejectWithValue(err.response?.data?.message || err.message || 'Login failed')

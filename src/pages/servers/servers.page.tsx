@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
     Box, Stack, Typography, Button, Card, CardContent, Chip,
     Dialog, DialogTitle, DialogContent, DialogActions,
@@ -8,8 +8,8 @@ import { Add, Refresh, ContentCopy } from '@mui/icons-material'
 import { useFormik } from 'formik'
 import * as Yup from 'yup'
 import { getServersApi, createServerApi } from '../../apis/servers/servers.api'
-import type { Server } from '../../apis/servers/servers.interface'
 import { formatRelative, getStatusColor } from '../../common/utils/format.utils'
+import useSWR from 'swr'
 import { useNavigate } from 'react-router-dom'
 import { useAppDispatch } from '../../redux/store.redux'
 import { showSnackbar } from '../../redux/system/system.slice'
@@ -22,20 +22,11 @@ const validationSchema = Yup.object({
 export const ServersPage = () => {
     const navigate = useNavigate()
     const dispatch = useAppDispatch()
-    const [servers, setServers] = useState<Server[]>([])
-    const [loading, setLoading] = useState(true)
+    const { data: servers = [], isLoading: loading, mutate: mutateServers } = useSWR('/servers', () => getServersApi(), {
+        onError: () => dispatch(showSnackbar({ message: 'Failed to load servers', severity: 'error' }))
+    })
     const [dialogOpen, setDialogOpen] = useState(false)
     const [creating, setCreating] = useState(false)
-
-    const fetchServers = () => {
-        setLoading(true)
-        getServersApi()
-            .then((res) => setServers(res.data))
-            .catch(() => dispatch(showSnackbar({ message: 'Failed to load servers', severity: 'error' })))
-            .finally(() => setLoading(false))
-    }
-
-    useEffect(() => { fetchServers() }, [])
 
     const formik = useFormik({
         initialValues: { name: '', ipAddress: '' },
@@ -47,7 +38,7 @@ export const ServersPage = () => {
                 dispatch(showSnackbar({ message: 'Server created successfully', severity: 'success' }))
                 setDialogOpen(false)
                 resetForm()
-                fetchServers()
+                mutateServers()
             } catch {
                 dispatch(showSnackbar({ message: 'Failed to create server', severity: 'error' }))
             } finally {
@@ -70,7 +61,7 @@ export const ServersPage = () => {
                 </Box>
                 <Stack direction="row" gap={1}>
                     <Tooltip title="Refresh">
-                        <IconButton onClick={fetchServers}><Refresh /></IconButton>
+                        <IconButton onClick={() => mutateServers()}><Refresh /></IconButton>
                     </Tooltip>
                     <Button variant="contained" startIcon={<Add />} onClick={() => setDialogOpen(true)}>
                         Add Server
@@ -105,6 +96,19 @@ export const ServersPage = () => {
                                         </Typography>
                                         <Tooltip title="Copy agent token">
                                             <IconButton size="small" onClick={(e) => { e.stopPropagation(); copyToken(server.agentToken) }}>
+                                                <ContentCopy fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                                        <Typography variant="caption" color="text.disabled" noWrap sx={{ flexGrow: 1 }}>
+                                            Install Cmd: curl -sSL https://ubuntu-server...
+                                        </Typography>
+                                        <Tooltip title="Copy install command">
+                                            <IconButton size="small" onClick={(e) => {
+                                                e.stopPropagation();
+                                                copyToken(`curl -sSL https://ubuntu-server-management.duckdns.org/scripts/install.sh | sudo bash -s -- -t ${server.agentToken} -u https://ubuntu-server-management.duckdns.org`);
+                                            }}>
                                                 <ContentCopy fontSize="small" />
                                             </IconButton>
                                         </Tooltip>

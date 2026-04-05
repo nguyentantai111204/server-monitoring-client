@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react'
+import useSWR from 'swr'
 import {
     Box, Stack, Card, CardContent, Typography, Chip,
     Skeleton, Avatar
 } from '@mui/material'
 import { Storage, CheckCircle, Error, HourglassEmpty } from '@mui/icons-material'
 import { getServersApi } from '../../apis/servers/servers.api'
-import type { Server } from '../../apis/servers/servers.interface'
 import { ServerStatus } from '../../common/enums/server-status.enum'
 import { formatRelative, getStatusColor } from '../../common/utils/format.utils'
 import { useNavigate } from 'react-router-dom'
@@ -28,15 +27,7 @@ const StatCard = ({
 
 export const DashboardPage = () => {
     const navigate = useNavigate()
-    const [servers, setServers] = useState<Server[]>([])
-    const [loading, setLoading] = useState(true)
-
-    useEffect(() => {
-        getServersApi()
-            .then((res) => setServers(res.data))
-            .catch(console.error)
-            .finally(() => setLoading(false))
-    }, [])
+    const { data: servers = [], isLoading: loading } = useSWR('/servers', () => getServersApi())
 
     const online = servers.filter((s) => s.status === ServerStatus.ONLINE).length
     const offline = servers.filter((s) => s.status === ServerStatus.OFFLINE).length
@@ -49,7 +40,6 @@ export const DashboardPage = () => {
                 Overview of your server infrastructure
             </Typography>
 
-            {/* Stat Cards */}
             <Stack direction="row" flexWrap="wrap" gap={2.5} mb={4}>
                 {loading ? (
                     Array.from({ length: 4 }).map((_, i) => (
