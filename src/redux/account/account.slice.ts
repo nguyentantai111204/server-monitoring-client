@@ -80,6 +80,7 @@ export const accountSlice = createSlice({
             })
             .addCase(getProfile.fulfilled, (state, action) => {
                 state.isLoading = false
+                state.isAuthenticated = true
                 state.user = action.payload
             })
             .addCase(getProfile.rejected, (state) => {

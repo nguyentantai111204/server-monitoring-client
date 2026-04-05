@@ -1,5 +1,13 @@
 import { ServerStatus } from '../../common/enums/server-status.enum'
 
+export interface ProcessInfo {
+    pid: number
+    user: string
+    cpu: number
+    mem: number
+    command: string
+}
+
 export interface Server {
     id: string
     ownerId: string
@@ -8,6 +16,7 @@ export interface Server {
     agentToken: string
     status: ServerStatus
     lastHeartbeat?: string
+    topProcesses?: ProcessInfo[] | null
     createdAt: string
     updatedAt: string
 }

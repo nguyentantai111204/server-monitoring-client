@@ -32,3 +32,7 @@ export const regenerateAgentTokenApi = async (id: string): Promise<{ agentToken:
     const response = await axiosInstance.post<ApiResponse<{ agentToken: string }>>(`/servers/${id}/regenerate-token`)
     return response.data.data
 }
+
+export const killProcessApi = async (serverId: string, pid: number): Promise<void> => {
+    await axiosInstance.post(`/servers/${serverId}/kill-process`, { pid })
+}
