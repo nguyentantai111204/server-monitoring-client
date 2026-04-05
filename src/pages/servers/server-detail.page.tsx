@@ -50,16 +50,18 @@ export const ServerDetailPage = () => {
         }
     )
 
+    const isOffline = server?.status === 'OFFLINE'
+
     const { data: metric } = useSWR(
         id ? `/metrics/${id}/latest` : null,
         () => getLatestMetricApi(id as string).catch(() => null),
-        { refreshInterval: 10000 }
+        { refreshInterval: isOffline ? 0 : 10000 }
     )
 
     const { data: history } = useSWR(
         id ? `/metrics/${id}/history` : null,
-        () => getMetricsApi(id as string, { limit: 100 }).then(res => res ? (Array.isArray(res) ? res : res.data) : []),
-        { refreshInterval: 10000 }
+        () => getMetricsApi(id as string, { limit: 20 }).then(res => res ? (Array.isArray(res) ? res : res.data) : []),
+        { refreshInterval: isOffline ? 0 : 10000 }
     )
 
     const loading = loadingServer && !server
