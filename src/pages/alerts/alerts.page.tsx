@@ -39,7 +39,7 @@ export const AlertsPage = () => {
     const fetchRules = () => {
         setLoading(true)
         Promise.all([getAlertRulesApi(), getServersApi()])
-            .then(([r, s]) => { setRules(r); setServers(s.data) })
+            .then(([r, s]) => { setRules(r); setServers(s) })
             .catch(() => dispatch(showSnackbar({ message: 'Failed to load alerts', severity: 'error' })))
             .finally(() => setLoading(false))
     }
