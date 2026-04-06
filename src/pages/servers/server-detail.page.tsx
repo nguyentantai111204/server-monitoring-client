@@ -2,37 +2,22 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
     Box, Stack, Typography, Card, CardContent, Chip,
-    Button, Skeleton, LinearProgress, Divider,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    CircularProgress, Tooltip, IconButton,
+    Button, Skeleton, Divider,
+    CircularProgress,
 } from '@mui/material'
-import { ArrowBack, ContentCopy, SystemUpdateAlt } from '@mui/icons-material'
+import { ArrowBack, ContentCopy, SystemUpdateAlt, People, Refresh } from '@mui/icons-material'
 import { getServerByIdApi, killProcessApi, updateAgentApi } from '../../apis/servers/servers.api'
 import { getLatestMetricApi, getMetricsApi } from '../../apis/metrics/metrics.api'
+import { getCommandByIdApi, requestActiveUsersApi } from '../../apis/commands/commands.api'
+import { CommandStatus } from '../../common/enums/command-status.enum'
 import useSWR from 'swr'
-import { formatRelative, formatPercent, formatBytes, getStatusColor } from '../../common/utils/format.utils'
+import { formatRelative, formatBytes, getStatusColor } from '../../common/utils/format.utils'
 import { useAppDispatch } from '../../redux/store.redux'
 import { showSnackbar } from '../../redux/system/system.slice'
 import { MetricChartComponent } from './components/metric-chart.component'
+import { MetricBar } from '../../components/metrics/metric-bar.component'
+import { ProcessTable } from './components/process-table.component'
 
-const MetricBar = ({ label, value, color }: { label: string; value: number; color: string }) => (
-    <Box mb={2}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-            <Typography variant="body2" fontWeight={500}>{label}</Typography>
-            <Typography variant="body2" color="text.secondary">{formatPercent(value)}</Typography>
-        </Box>
-        <LinearProgress
-            variant="determinate"
-            value={Math.min(value, 100)}
-            sx={{
-                height: 8,
-                borderRadius: 4,
-                bgcolor: 'action.hover',
-                '& .MuiLinearProgress-bar': { bgcolor: color, borderRadius: 4 },
-            }}
-        />
-    </Box>
-)
 
 export const ServerDetailPage = () => {
     const { id } = useParams<{ id: string }>()
@@ -40,6 +25,8 @@ export const ServerDetailPage = () => {
     const dispatch = useAppDispatch()
     const [killingPid, setKillingPid] = useState<number | null>(null)
     const [isUpdating, setIsUpdating] = useState(false)
+    const [activeUsersCommandId, setActiveUsersCommandId] = useState<string | null>(null)
+    const [isFetchingUsers, setIsFetchingUsers] = useState(false)
 
     const { data: server, isLoading: loadingServer, mutate: mutateServer } = useSWR(
         id ? `/servers/${id}` : null,
@@ -62,6 +49,20 @@ export const ServerDetailPage = () => {
         id ? `/metrics/${id}/history` : null,
         () => getMetricsApi(id as string, { limit: 20 }).then(res => res ? (Array.isArray(res) ? res : res.data) : []),
         { refreshInterval: isOffline ? 0 : 10000 }
+    )
+
+    // Polling for active users command result
+    const { data: userCommand } = useSWR(
+        activeUsersCommandId ? `/commands/${activeUsersCommandId}` : null,
+        () => getCommandByIdApi(activeUsersCommandId as string),
+        {
+            refreshInterval: (data) => (data?.status === CommandStatus.PENDING || data?.status === CommandStatus.PROCESSING) ? 2000 : 0,
+            onSuccess: (data) => {
+                if (data?.status === CommandStatus.SUCCESS || data?.status === CommandStatus.FAILED) {
+                    setIsFetchingUsers(false)
+                }
+            }
+        }
     )
 
     const loading = loadingServer && !server
@@ -96,6 +97,20 @@ export const ServerDetailPage = () => {
             dispatch(showSnackbar({ message: 'Failed to queue update command', severity: 'error' }))
         } finally {
             setIsUpdating(false)
+        }
+    }
+
+    const handleFetchUsers = async () => {
+        if (!id) return
+        setIsFetchingUsers(true)
+        setActiveUsersCommandId(null)
+        try {
+            const cmd = await requestActiveUsersApi(id)
+            setActiveUsersCommandId(cmd.id)
+            dispatch(showSnackbar({ message: 'Fetching active users...', severity: 'info' }))
+        } catch {
+            dispatch(showSnackbar({ message: 'Failed to request active users', severity: 'error' }))
+            setIsFetchingUsers(false)
         }
     }
 
@@ -243,6 +258,60 @@ export const ServerDetailPage = () => {
                 </Box>
             )}
 
+            {/* User Sessions Monitoring */}
+            <Box mt={3}>
+                <Card>
+                    <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <People color="primary" />
+                                <Typography variant="h6" fontWeight={600}>
+                                    Logged-in Users
+                                </Typography>
+                            </Box>
+                            <Button 
+                                size="small" 
+                                startIcon={isFetchingUsers ? <CircularProgress size={14} color="inherit" /> : <Refresh />}
+                                onClick={handleFetchUsers}
+                                disabled={isFetchingUsers || isOffline}
+                            >
+                                {isFetchingUsers ? 'Fetching...' : 'Refresh'}
+                            </Button>
+                        </Box>
+
+                        {userCommand?.status === CommandStatus.SUCCESS ? (
+                            <Box sx={{ 
+                                bgcolor: 'grey.900', 
+                                color: 'grey.100', 
+                                p: 2, 
+                                borderRadius: 1, 
+                                fontFamily: 'monospace',
+                                fontSize: '0.875rem',
+                                whiteSpace: 'pre-wrap',
+                                minHeight: 60
+                            }}>
+                                {userCommand.resultLog || 'No users logged in.'}
+                            </Box>
+                        ) : userCommand?.status === CommandStatus.FAILED ? (
+                            <Typography color="error" variant="body2">
+                                Error: {userCommand.resultLog || 'Failed to fetch users.'}
+                            </Typography>
+                        ) : isFetchingUsers ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
+                                <CircularProgress size={20} />
+                                <Typography variant="body2" color="text.secondary">
+                                    Agent is processing command... (this may take up to 10s)
+                                </Typography>
+                            </Box>
+                        ) : (
+                            <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
+                                Click Refresh to see current logged-in users on this server.
+                            </Typography>
+                        )}
+                    </CardContent>
+                </Card>
+            </Box>
+
             {/* Process Manager */}
             <Box mt={3}>
                 <Card>
@@ -255,98 +324,11 @@ export const ServerDetailPage = () => {
                                 Top 15 by CPU · refreshes every 30s
                             </Typography>
                         </Box>
-                        {processes.length > 0 ? (
-                            <TableContainer>
-                                <Table size="small">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell sx={{ fontWeight: 700, width: 70 }}>PID</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, width: 100 }}>User</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, width: 90 }} align="right">CPU %</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, width: 90 }} align="right">RAM %</TableCell>
-                                            <TableCell sx={{ fontWeight: 700 }}>Command</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, width: 80 }} align="center">Kill</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {processes.map((proc, idx) => (
-                                            <TableRow
-                                                key={proc.pid}
-                                                sx={{
-                                                    bgcolor: idx % 2 === 0 ? 'transparent' : 'action.hover',
-                                                    '&:hover': { bgcolor: 'action.selected' },
-                                                    transition: 'background 0.15s',
-                                                }}
-                                            >
-                                                <TableCell>
-                                                    <Typography variant="caption" fontFamily="monospace" color="text.secondary">
-                                                        {proc.pid}
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Typography variant="caption">{proc.user}</Typography>
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                    <Chip
-                                                        label={`${proc.cpu.toFixed(1)}%`}
-                                                        size="small"
-                                                        sx={{
-                                                            bgcolor: proc.cpu > 30 ? 'error.main' : proc.cpu > 10 ? 'warning.main' : 'action.hover',
-                                                            color: proc.cpu > 10 ? '#fff' : 'text.primary',
-                                                            fontWeight: 700,
-                                                            fontSize: '0.7rem',
-                                                        }}
-                                                    />
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                    <Typography variant="caption">{proc.mem.toFixed(1)}%</Typography>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Typography
-                                                        variant="caption"
-                                                        fontFamily="monospace"
-                                                        sx={{
-                                                            maxWidth: 300,
-                                                            display: 'block',
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis',
-                                                            whiteSpace: 'nowrap',
-                                                        }}
-                                                    >
-                                                        {proc.command}
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <Tooltip title={`Kill PID ${proc.pid}`} arrow>
-                                                        <span>
-                                                            <IconButton
-                                                                size="small"
-                                                                color="error"
-                                                                disabled={killingPid === proc.pid}
-                                                                onClick={() => handleKill(proc.pid)}
-                                                                sx={{
-                                                                    '&:hover': { bgcolor: 'error.dark', color: '#fff' },
-                                                                    transition: 'all 0.2s',
-                                                                }}
-                                                            >
-                                                                {killingPid === proc.pid
-                                                                    ? <CircularProgress size={16} color="inherit" />
-                                                                    : <span style={{ fontSize: 16 }}>💀</span>
-                                                                }
-                                                            </IconButton>
-                                                        </span>
-                                                    </Tooltip>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        ) : (
-                            <Typography color="text.secondary" textAlign="center" py={4}>
-                                No process data yet. Process list will appear after the next agent metric push.
-                            </Typography>
-                        )}
+                        <ProcessTable 
+                            processes={processes} 
+                            killingPid={killingPid} 
+                            onKill={handleKill} 
+                        />
                     </CardContent>
                 </Card>
             </Box>

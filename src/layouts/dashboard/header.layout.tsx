@@ -52,13 +52,11 @@ export const HeaderLayout = ({ onToggleSidebar }: HeaderLayoutProps) => {
             }}
         >
             <Toolbar sx={{ height: '100%', px: { xs: 2, lg: 3 } }}>
-                {/* Mobile menu toggle */}
                 <IconButton onClick={onToggleSidebar} sx={{ mr: 1, display: { lg: 'none' } }}>
                     <MenuIcon />
                 </IconButton>
 
-                {/* Logo (mobile) */}
-                <Box sx={{ display: { xs: 'flex', lg: 'none' }, alignItems: 'center', gap: 1 }}>
+                <Box sx={{ display: { xs: 'flex', lg: 'none' }, alignItems: 'center', gap: 1 }} onClick={() => navigate('/')}>
                     <Monitor sx={{ color: 'primary.main', fontSize: 22 }} />
                     <Typography variant="subtitle1" fontWeight={700} color="primary">
                         ServerWatch
@@ -67,14 +65,12 @@ export const HeaderLayout = ({ onToggleSidebar }: HeaderLayoutProps) => {
 
                 <Box sx={{ flexGrow: 1 }} />
 
-                {/* Theme toggle */}
                 <Tooltip title={mode === 'dark' ? 'Light mode' : 'Dark mode'}>
                     <IconButton onClick={toggleMode} size="small" sx={{ mr: 1 }}>
                         {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
                     </IconButton>
                 </Tooltip>
 
-                {/* User avatar menu */}
                 <Chip
                     avatar={
                         <Avatar sx={{ bgcolor: 'primary.main', width: 28, height: 28, fontSize: 12 }}>

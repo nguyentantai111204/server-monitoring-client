@@ -1,7 +1,7 @@
 export const CommandStatus = {
     PENDING: 'PENDING',
-    SENT: 'SENT',
-    COMPLETED: 'COMPLETED',
+    PROCESSING: 'PROCESSING',
+    SUCCESS: 'SUCCESS',
     FAILED: 'FAILED',
 } as const
 

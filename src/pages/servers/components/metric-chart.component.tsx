@@ -70,7 +70,7 @@ export const MetricChartComponent = ({ data, title, type }: MetricChartProps) =>
                                 />
                                 <Tooltip
                                     contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    formatter={(value: any) => [formatPercent(value), '']}
+                                    formatter={(value: any) => [formatPercent(Number(value || 0)), '']}
                                 />
                                 <Legend verticalAlign="top" height={36} />
                                 <Area
@@ -122,7 +122,7 @@ export const MetricChartComponent = ({ data, title, type }: MetricChartProps) =>
                             />
                             <Tooltip
                                 contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                formatter={(value: any) => [formatBytes(value) + '/s', '']}
+                                formatter={(value: any) => [formatBytes(Number(value || 0)) + '/s', '']}
                             />
                             <Legend verticalAlign="top" height={36} />
                             <Line

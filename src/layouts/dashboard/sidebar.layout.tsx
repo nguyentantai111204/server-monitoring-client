@@ -29,14 +29,16 @@ const SidebarContent = () => {
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* Logo */}
             <Box
+                onClick={() => navigate('/')}
                 sx={{
                     px: 3,
                     py: 2.5,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1.5,
+                    cursor: 'pointer',
+                    '&:hover': { opacity: 0.8 }
                 }}
             >
                 <Box

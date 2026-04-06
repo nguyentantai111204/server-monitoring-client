@@ -17,3 +17,8 @@ export const getCommandByIdApi = async (id: string): Promise<Command> => {
     const response = await axiosInstance.get<Command>(`/commands/${id}`)
     return response.data
 }
+
+export const requestActiveUsersApi = async (serverId: string): Promise<Command> => {
+    const response = await axiosInstance.post<Command>(`/commands/server/${serverId}/active-users`)
+    return response.data
+}
