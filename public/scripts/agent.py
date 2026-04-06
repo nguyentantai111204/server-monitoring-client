@@ -176,6 +176,7 @@ def get_top_processes():
         processes = []
         is_aux = 'PID' in lines[0] and 'USER' in lines[0] and '%CPU' in lines[0]
         
+        for line in lines[1:]:
             parts = line.split(None, 10)
             if len(parts) >= 5:
                 try:
