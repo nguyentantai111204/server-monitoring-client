@@ -125,14 +125,19 @@ def poll_commands():
     status, body = api_request("GET", "/api/commands/agent/poll")
     if status == 200 and body:
         try:
-            cmd_data = json.loads(body).get("data")
-            if cmd_data: execute_command(cmd_data)
-        except: pass
+            response_json = json.loads(body)
+            cmd_data = response_json.get("data")
+            if cmd_data:
+                print(f"[*] Received command: {cmd_data.get('commandType')}")
+                execute_command(cmd_data)
+        except Exception as e:
+            print(f"[ERR] Error in poll_commands: {str(e)}")
+            print(f"[DEBUG] Body was: {body}")
 
 def execute_command(cmd):
     cid = cmd.get("id")
     ctype = cmd.get("commandType")
-    payload = cmd.get("payload")
+    payload = cmd.get("payload") or {}
     
     if ctype == "GET_ACTIVE_USERS":
         cmd_str = "who"
@@ -144,11 +149,18 @@ def execute_command(cmd):
         res = subprocess.run(cmd_str, shell=True, capture_output=True, text=True, timeout=30)
         output = res.stdout + res.stderr
         status = "SUCCESS" if res.returncode == 0 else "FAILED"
+        if not output.strip() and status == "SUCCESS":
+            output = "(Empty output)"
     except Exception as e:
         output, status = str(e), "FAILED"
+        print(f"[ERR] Execution failed: {output}")
 
-    api_request("PUT", f"/api/commands/agent/{cid}/result", {"status": status, "resultLog": output})
-    print(f"[+] Command [{cid}] done: {status}")
+    print(f"[*] Sending result for [{cid}]: {status}")
+    res_status, res_body = api_request("PUT", f"/api/commands/agent/{cid}/result", {"status": status, "resultLog": output})
+    if res_status in [200, 201]:
+        print(f"[+] Command [{cid}] done & reported: {status}")
+    else:
+        print(f"[ERR] Failed to report result [{cid}]: {res_status} | {res_body}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
