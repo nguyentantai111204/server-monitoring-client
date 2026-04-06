@@ -1,61 +1,45 @@
 #!/bin/bash
 
-AGENT_TOKEN=""
-BACKEND_URL=""
-INSTALL_DIR="/opt/server-monitor-agent"
-
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        -t|--token) AGENT_TOKEN="$2"; shift ;;
-        -u|--url) BACKEND_URL="$2"; shift ;;
-        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+        -t|--token) TOKEN="$2"; shift ;;
+        -u|--url) URL="$2"; shift ;;
     esac
     shift
 done
 
-if [ -z "$AGENT_TOKEN" ] || [ -z "$BACKEND_URL" ]; then
-    echo "Usage: sudo bash install.sh -t <token> -u http://ubuntu-server-management.duckdns.org"
+if [ -z "$TOKEN" ] || [ -z "$URL" ]; then
+    echo "Usage: sudo bash install.sh -t <token> -u <url>"
     exit 1
 fi
 
-echo "--- Installing Server Monitor Agent ---"
-
+echo "--- Installing Agent ---"
+INSTALL_DIR="/opt/server-monitor"
+mkdir -p $INSTALL_DIR
 
 if ! command -v python3 &> /dev/null; then
-    echo "Python3 not found. Installing Python3..."
-    sudo apt-get update
-    sudo apt-get install -y python3
+    apt update && apt install -y python3
 fi
 
-sudo mkdir -p $INSTALL_DIR
-sudo chown $USER:$USER $INSTALL_DIR
+echo "Downloading agent..."
+curl -sSL "$URL/scripts/agent.py" -o "$INSTALL_DIR/agent.py"
 
-echo "Downloading agent.py from $BACKEND_URL/scripts/agent.py..."
-curl -sSL "$BACKEND_URL/scripts/agent.py" -o "$INSTALL_DIR/agent.py"
-chmod +x "$INSTALL_DIR/agent.py"
-
-echo "Creating systemd service..."
-sudo tee /etc/systemd/system/server-monitor-agent.service > /dev/null <<EOF
+cat <<EOF > /etc/systemd/system/server-monitor.service
 [Unit]
 Description=Server Monitor Agent
 After=network.target
 
 [Service]
-Type=simple
-User=$USER
-WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/python3 agent.py -t $AGENT_TOKEN -u $BACKEND_URL
+ExecStart=/usr/bin/python3 $INSTALL_DIR/agent.py -t $TOKEN -u $URL
 Restart=always
-RestartSec=10
+User=root
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-echo "Starting and enabling service..."
-sudo systemctl daemon-reload
-sudo systemctl restart server-monitor-agent
-sudo systemctl enable server-monitor-agent
+systemctl daemon-reload
+systemctl enable --now server-monitor
+systemctl status server-monitor --no-pager
 
-echo "--- Installation Complete ---"
-sudo systemctl status server-monitor-agent --no-pager
+echo "--- Done! ---"
