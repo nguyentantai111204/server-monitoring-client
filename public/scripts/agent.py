@@ -151,29 +151,53 @@ def get_top_processes():
     try:
         if sys.platform == 'win32':
             return []
-        result = subprocess.run(
-            ['ps', '-eo', 'pid,user,%cpu,%mem,comm', '--sort=-%cpu'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=5,
-        )
+            
+        # Try primary command (standard procps-ng)
+        cmd = ['ps', '-eo', 'pid,user,%cpu,%mem,comm', '--sort=-%cpu']
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+        
+        # If --sort fails (e.g. on older ps/busybox), try without sort and sort in Python
+        if result.returncode != 0:
+            cmd = ['ps', '-eo', 'pid,user,%cpu,%mem,comm']
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+            
+        if result.returncode != 0:
+             # Last resort: try aux format
+             cmd = ['ps', 'aux', '--sort=-%cpu']
+             result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+             if result.returncode != 0:
+                 cmd = ['ps', 'aux']
+                 result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+
         lines = result.stdout.strip().splitlines()
+        if not lines:
+            return []
+
         processes = []
-        for line in lines[1:16]:  # skip header, take top 15
-            parts = line.split(None, 4)
-            if len(parts) == 5:
+        is_aux = 'PID' in lines[0] and 'USER' in lines[0] and '%CPU' in lines[0]
+        
+            parts = line.split(None, 10)
+            if len(parts) >= 5:
                 try:
+                    p_pid = int(parts[0])
+                    p_user = parts[1]
+                    p_cpu = float(parts[2].replace(',', '.'))
+                    p_mem = float(parts[3].replace(',', '.'))
+                    p_comm = " ".join(parts[4:]).strip()
+                    
                     processes.append({
-                        "pid": int(parts[0]),
-                        "user": parts[1],
-                        "cpu": float(parts[2]),
-                        "mem": float(parts[3]),
-                        "command": parts[4].strip(),
+                        "pid": p_pid,
+                        "user": p_user,
+                        "cpu": p_cpu,
+                        "mem": p_mem,
+                        "command": p_comm,
                     })
-                except ValueError:
+                except (ValueError, IndexError):
                     continue
-        return processes
+        
+        # Sort by CPU descending if we couldn't use --sort
+        processes.sort(key=lambda x: x['cpu'], reverse=True)
+        return processes[:15]
     except Exception as e:
         print(f"[Agent] Error reading processes: {e}")
         return []
