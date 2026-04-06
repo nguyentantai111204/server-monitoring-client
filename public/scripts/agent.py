@@ -174,17 +174,34 @@ def get_top_processes():
             return []
 
         processes = []
-        is_aux = 'PID' in lines[0] and 'USER' in lines[0] and '%CPU' in lines[0]
-        
-        for line in lines[1:]:
-            parts = line.split(None, 10)
-            if len(parts) >= 5:
+        # Find column indices dynamically
+        header = lines[0].upper().split()
+        is_aux = 'PID' in header and 'USER' in header and '%CPU' in header
+        try:
+            get_idx = lambda name: next(i for i, h in enumerate(header) if name in h)
+            idx_pid = get_idx('PID')
+            idx_user = get_idx('USER')
+            idx_cpu = get_idx('CPU')
+            idx_mem = get_idx('MEM')
+            idx_comm = get_idx('COMM') if 'COMMAND' not in header else get_idx('COMMAND')
+        except (StopIteration, ValueError):
+            # Fallback to defaults if header is weird
+            if is_aux:
+                idx_user, idx_pid, idx_cpu, idx_mem = 0, 1, 2, 3
+                idx_comm = 10
+            else:
+                idx_pid, idx_user, idx_cpu, idx_mem, idx_comm = 0, 1, 2, 3, 4
+
+        for line in lines[1:]: 
+            parts = line.split(None, max(idx_comm, 10))
+            if len(parts) > max(idx_pid, idx_user, idx_cpu, idx_mem, idx_comm):
                 try:
-                    p_pid = int(parts[0])
-                    p_user = parts[1]
-                    p_cpu = float(parts[2].replace(',', '.'))
-                    p_mem = float(parts[3].replace(',', '.'))
-                    p_comm = " ".join(parts[4:]).strip()
+                    p_pid = int(parts[idx_pid])
+                    p_user = parts[idx_user]
+                    p_cpu = float(parts[idx_cpu].replace(',', '.'))
+                    p_mem = float(parts[idx_mem].replace(',', '.'))
+                    # Comm can be multiple parts if it's the last one
+                    p_comm = " ".join(parts[idx_comm:]).strip()
                     
                     processes.append({
                         "pid": p_pid,
