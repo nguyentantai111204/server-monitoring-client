@@ -30,7 +30,7 @@ Description=Server Monitor Agent
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 $INSTALL_DIR/agent.py -t $TOKEN -u $URL
+ExecStart=/usr/bin/python3 -u $INSTALL_DIR/agent.py -t $TOKEN -u $URL
 Restart=always
 User=root
 
