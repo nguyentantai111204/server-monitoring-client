@@ -24,7 +24,7 @@ fi
 echo "Downloading agent..."
 curl -sSL "$URL/scripts/agent.py" -o "$INSTALL_DIR/agent.py"
 
-cat <<EOF > /etc/systemd/system/server-monitor.service
+cat <<EOF > /etc/systemd/system/server-monitor-agent.service
 [Unit]
 Description=Server Monitor Agent
 After=network.target
@@ -39,7 +39,7 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now server-monitor
-systemctl status server-monitor --no-pager
+systemctl enable --now server-monitor-agent
+systemctl status server-monitor-agent --no-pager
 
 echo "--- Done! ---"
