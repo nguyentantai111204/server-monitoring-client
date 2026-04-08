@@ -12,6 +12,7 @@ from urllib.error import HTTPError, URLError
 # Configuration
 AGENT_TOKEN = ""
 BACKEND_URL = ""
+MANUAL_IP = None
 METRIC_INTERVAL = 30
 POLL_INTERVAL = 10
 
@@ -104,6 +105,22 @@ def api_request(method, endpoint, data=None):
     except HTTPError as e: return e.code, e.read().decode("utf-8")
     except: return 0, ""
 
+def get_ip_address():
+    if MANUAL_IP:
+        return MANUAL_IP
+    try:
+        # Try to find the primary interface IP by creating a dummy UDP connection
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "0.0.0.0"
+
 def push_metrics():
     net = get_network_usage()
     payload = {
@@ -112,7 +129,7 @@ def push_metrics():
         "diskUsage": get_disk_usage(),
         "networkIn": net["networkIn"],
         "networkOut": net["networkOut"],
-        "ipAddress": socket.gethostbyname(socket.gethostname()),
+        "ipAddress": get_ip_address(),
         "topProcesses": get_top_processes()
     }
     status, body = api_request("POST", "/api/metrics/push", payload)
@@ -166,9 +183,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--token", required=True)
     parser.add_argument("-u", "--url", required=True)
+    parser.add_argument("--ip", help="Manually specify IP address")
     args = parser.parse_args()
     
-    AGENT_TOKEN, BACKEND_URL = args.token, args.url
+    AGENT_TOKEN, BACKEND_URL, MANUAL_IP = args.token, args.url, args.ip
     print(f"--- Agent running | URL: {BACKEND_URL} ---")
     
     last_metric = last_poll = 0

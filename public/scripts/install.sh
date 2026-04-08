@@ -4,6 +4,7 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         -t|--token) TOKEN="$2"; shift ;;
         -u|--url) URL="$2"; shift ;;
+        -ip|--ip) IP="$2"; shift ;;
     esac
     shift
 done
@@ -24,13 +25,18 @@ fi
 echo "Downloading agent..."
 curl -sSL "$URL/scripts/agent.py" -o "$INSTALL_DIR/agent.py"
 
+IP_STR=""
+if [ -n "$IP" ]; then
+    IP_STR="--ip $IP"
+fi
+
 cat <<EOF > /etc/systemd/system/server-monitor-agent.service
 [Unit]
 Description=Server Monitor Agent
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 -u $INSTALL_DIR/agent.py -t $TOKEN -u $URL
+ExecStart=/usr/bin/python3 -u $INSTALL_DIR/agent.py -t $TOKEN -u $URL $IP_STR
 Restart=always
 User=root
 
