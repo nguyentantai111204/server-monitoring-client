@@ -45,7 +45,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now server-monitor-agent
+systemctl enable server-monitor-agent
+systemctl restart server-monitor-agent
 systemctl status server-monitor-agent --no-pager
 
 echo "--- Done! ---"

@@ -9,11 +9,8 @@ export default function App() {
         <AppProvider>
             <SWRConfig value={{
                 onErrorRetry: (error, _key, _config, revalidate, { retryCount }) => {
-                    // Don't retry on 401 Unauthorized
                     if (error?.status === 401 || error?.response?.status === 401) return
-                    // Only retry up to 3 times
                     if (retryCount >= 3) return
-                    // Retry after 5 seconds
                     setTimeout(() => revalidate({ retryCount }), 5000)
                 }
             }}>
