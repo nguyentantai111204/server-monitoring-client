@@ -157,17 +157,26 @@ def execute_command(cmd):
     payload = cmd.get("payload") or {}
     
     if ctype == "GET_ACTIVE_USERS":
-        cmd_str = "who"
+        # More robust command to get logged-in users
+        cmd_str = "who || w -h || users"
+    elif ctype == "UPDATE_AGENT":
+        # Special case if needed, but for now we follow general cmd
+        cmd_str = payload.get("cmd") if isinstance(payload, dict) else str(payload)
     else:
         cmd_str = payload.get("cmd") if isinstance(payload, dict) else str(payload)
     
+    if not cmd_str:
+        print(f"[ERR] No command string for {ctype}")
+        api_request("PUT", f"/api/commands/agent/{cid}/result", {"status": "FAILED", "resultLog": f"No command provided for {ctype}"})
+        return
+
     print(f"[*] Executing [{cid}] ({ctype}): {cmd_str}")
     try:
         res = subprocess.run(cmd_str, shell=True, capture_output=True, text=True, timeout=30)
         output = res.stdout + res.stderr
         status = "SUCCESS" if res.returncode == 0 else "FAILED"
         if not output.strip() and status == "SUCCESS":
-            output = "(Empty output)"
+            output = "(No output)"
     except Exception as e:
         output, status = str(e), "FAILED"
         print(f"[ERR] Execution failed: {output}")
