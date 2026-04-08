@@ -121,6 +121,19 @@ def get_ip_address():
         except Exception:
             return "0.0.0.0"
 
+def get_human_users():
+    users = []
+    try:
+        with open("/etc/passwd", "r") as f:
+            for line in f:
+                p = line.split(":")
+                if len(p) >= 3:
+                    uid = int(p[2])
+                    if 1000 <= uid < 65534:
+                        users.append(p[0])
+    except: pass
+    return sorted(users)
+
 def push_metrics():
     net = get_network_usage()
     payload = {
@@ -157,29 +170,57 @@ def execute_command(cmd):
     payload = cmd.get("payload") or {}
     
     if ctype == "GET_ACTIVE_USERS":
-        # More robust command to get logged-in users
-        cmd_str = "who || w -h || users"
+        all_users = get_human_users()
+        try:
+            who_out = subprocess.check_output("who", shell=True, text=True).strip().splitlines()
+        except: who_out = []
+        
+        active_map = {}
+        for line in who_out:
+            parts = line.split()
+            if parts:
+                user = parts[0]
+                session = " ".join(parts[1:])
+                if user not in active_map: active_map[user] = []
+                active_map[user].append(session)
+        
+        lines = []
+        for u in all_users:
+            if u in active_map:
+                lines.append(f"{u:<15} [ACTIVE]  ({', '.join(active_map[u])})")
+            else:
+                lines.append(f"{u:<15} [OFFLINE]")
+        
+        if "root" in active_map:
+            lines.insert(0, f"{'root':<15} [ACTIVE]  ({', '.join(active_map['root'])})")
+            
+        output = "\n".join(lines) if lines else "No system users found."
+        cmd_str = None # Skip process execution
     elif ctype == "UPDATE_AGENT":
         # Special case if needed, but for now we follow general cmd
         cmd_str = payload.get("cmd") if isinstance(payload, dict) else str(payload)
     else:
         cmd_str = payload.get("cmd") if isinstance(payload, dict) else str(payload)
     
-    if not cmd_str:
+    if not cmd_str and ctype != "GET_ACTIVE_USERS":
         print(f"[ERR] No command string for {ctype}")
         api_request("PUT", f"/api/commands/agent/{cid}/result", {"status": "FAILED", "resultLog": f"No command provided for {ctype}"})
         return
 
-    print(f"[*] Executing [{cid}] ({ctype}): {cmd_str}")
-    try:
-        res = subprocess.run(cmd_str, shell=True, capture_output=True, text=True, timeout=30)
-        output = res.stdout + res.stderr
-        status = "SUCCESS" if res.returncode == 0 else "FAILED"
-        if not output.strip() and status == "SUCCESS":
-            output = "(No output)"
-    except Exception as e:
-        output, status = str(e), "FAILED"
-        print(f"[ERR] Execution failed: {output}")
+    if cmd_str:
+        print(f"[*] Executing [{cid}] ({ctype}): {cmd_str}")
+        try:
+            res = subprocess.run(cmd_str, shell=True, capture_output=True, text=True, timeout=30)
+            output = res.stdout + res.stderr
+            status = "SUCCESS" if res.returncode == 0 else "FAILED"
+            if not output.strip() and status == "SUCCESS":
+                output = "(No output)"
+        except Exception as e:
+            output, status = str(e), "FAILED"
+            print(f"[ERR] Execution failed: {output}")
+    else:
+        # For commands handled natively like GET_ACTIVE_USERS
+        status = "SUCCESS"
 
     print(f"[*] Sending result for [{cid}]: {status}")
     res_status, res_body = api_request("PUT", f"/api/commands/agent/{cid}/result", {"status": status, "resultLog": output})

@@ -266,7 +266,7 @@ export const ServerDetailPage = () => {
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <People color="primary" />
                                 <Typography variant="h6" fontWeight={600}>
-                                    Logged-in Users
+                                    System Users
                                 </Typography>
                             </Box>
                             <Button 
@@ -290,7 +290,7 @@ export const ServerDetailPage = () => {
                                 whiteSpace: 'pre-wrap',
                                 minHeight: 60
                             }}>
-                                {userCommand.resultLog || 'No users logged in.'}
+                                {userCommand.resultLog || 'No system users found.'}
                             </Box>
                         ) : userCommand?.status === CommandStatus.FAILED ? (
                             <Typography color="error" variant="body2">
@@ -305,7 +305,7 @@ export const ServerDetailPage = () => {
                             </Box>
                         ) : (
                             <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
-                                Click Refresh to see current logged-in users on this server.
+                                Click Refresh to see all system users and their active sessions.
                             </Typography>
                         )}
                     </CardContent>
