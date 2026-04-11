@@ -1,7 +1,7 @@
 import axiosInstance from '../../common/config/axios.config'
-import type { AlertRule, CreateAlertRuleRequest, UpdateAlertRuleRequest } from './alerts.interface'
-
+import type { AlertRule, AuditLog, CreateAlertRuleRequest, UpdateAlertRuleRequest } from './alerts.interface'
 import type { ApiResponse } from '../../common/interfaces/api.interface'
+
 
 export const getAlertRulesApi = async (serverId?: string): Promise<AlertRule[]> => {
     const response = await axiosInstance.get<ApiResponse<AlertRule[]>>('/alerts', {
@@ -22,4 +22,11 @@ export const updateAlertRuleApi = async (id: string, data: UpdateAlertRuleReques
 
 export const deleteAlertRuleApi = async (id: string): Promise<void> => {
     await axiosInstance.delete(`/alerts/${id}`)
+}
+
+export const getAuditLogsApi = async (limit = 100): Promise<AuditLog[]> => {
+    const response = await axiosInstance.get<ApiResponse<AuditLog[]>>('/alerts/audit-logs', {
+        params: { limit },
+    })
+    return response.data.data
 }

@@ -16,6 +16,7 @@ import { verifyServerPasswordApi } from '../../apis/servers/servers.api'
 import { getLatestMetricApi, getMetricsApi } from '../../apis/metrics/metrics.api'
 import { getCommandByIdApi, requestActiveUsersApi } from '../../apis/commands/commands.api'
 import { CommandStatus } from '../../common/enums/command-status.enum'
+import { AlertRulesCard } from './components/alert-rules-card.component'
 import useSWR from 'swr'
 import { formatRelative, formatBytes, getStatusColor } from '../../common/utils/format.utils'
 import { useAppDispatch } from '../../redux/store.redux'
@@ -25,7 +26,6 @@ import { MetricBar } from '../../components/metrics/metric-bar.component'
 import { ProcessTable } from './components/process-table.component'
 import type { ServerSecrets } from '../../apis/servers/servers.interface'
 
-// ─── Password Dialog ──────────────────────────────────────────────────────────
 
 interface PasswordDialogProps {
     open: boolean
@@ -334,7 +334,6 @@ export const ServerDetailPage = () => {
                     </Card>
                 </Box>
 
-                {/* ─── Latest Metrics ───────────────────────────────────────────── */}
                 <Box sx={{ flex: 1, width: { xs: '100%', md: 'auto' } }}>
                     <Card>
                         <CardContent>
@@ -373,7 +372,6 @@ export const ServerDetailPage = () => {
                 </Box>
             </Stack>
 
-            {/* ─── Monitoring Charts ────────────────────────────────────────────── */}
             {history && history.length > 0 && (
                 <Box mt={3}>
                     <Stack direction={{ xs: 'column', lg: 'row' }} gap={2.5}>
@@ -387,7 +385,6 @@ export const ServerDetailPage = () => {
                 </Box>
             )}
 
-            {/* ─── User Sessions Monitoring ─────────────────────────────────────── */}
             <Box mt={3}>
                 <Card>
                     <CardContent>
@@ -433,7 +430,8 @@ export const ServerDetailPage = () => {
                 </Card>
             </Box>
 
-            {/* ─── Process Manager ──────────────────────────────────────────────── */}
+            <AlertRulesCard serverId={id as string} />
+
             <Box mt={3}>
                 <Card>
                     <CardContent>
@@ -446,7 +444,6 @@ export const ServerDetailPage = () => {
                 </Card>
             </Box>
 
-            {/* ─── Password Dialog ──────────────────────────────────────────────── */}
             <PasswordDialog
                 open={passwordDialogOpen}
                 serverId={id as string}

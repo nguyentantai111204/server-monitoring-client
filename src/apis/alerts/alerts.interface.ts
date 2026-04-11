@@ -10,6 +10,15 @@ export interface AlertRule {
     updatedAt: string
 }
 
+export interface AuditLog {
+    id: number
+    userId?: string
+    action: string
+    description?: string
+    timestamp: string
+    user?: { id: string; fullName: string; email: string }
+}
+
 export interface CreateAlertRuleRequest {
     serverId: string
     metricType: MetricType
