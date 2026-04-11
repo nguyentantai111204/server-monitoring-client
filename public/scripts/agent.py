@@ -129,7 +129,7 @@ def get_human_users():
                 p = line.split(":")
                 if len(p) >= 3:
                     uid = int(p[2])
-                    if 1000 <= uid < 65534:
+                    if 500 <= uid < 65534:
                         users.append(p[0])
     except: pass
     return sorted(users)
@@ -184,15 +184,24 @@ def execute_command(cmd):
                 if user not in active_map: active_map[user] = []
                 active_map[user].append(session)
         
+        # Combine human users and any currently active users
+        all_potential = set(all_users)
+        for active_user in active_map.keys():
+            all_potential.add(active_user)
+            
+        # Sort and ensure root is at the top if present
+        sorted_users = sorted(list(all_potential))
+        if "root" in sorted_users:
+            sorted_users.remove("root")
+            sorted_users.insert(0, "root")
+            
         lines = []
-        for u in all_users:
-            if u in active_map:
-                lines.append(f"{u:<15} [ACTIVE]  ({', '.join(active_map[u])})")
-            else:
-                lines.append(f"{u:<15} [OFFLINE]")
-        
-        if "root" in active_map:
-            lines.insert(0, f"{'root':<15} [ACTIVE]  ({', '.join(active_map['root'])})")
+        for u in sorted_users:
+            status = f"[ACTIVE]  ({', '.join(active_map[u])})" if u in active_map else "[OFFLINE]"
+            # Special case: don't show root if it's offline (to keep list cleaner)
+            if u == "root" and u not in active_map:
+                continue
+            lines.append(f"{u:<15} {status}")
             
         output = "\n".join(lines) if lines else "No system users found."
         cmd_str = None # Skip process execution
