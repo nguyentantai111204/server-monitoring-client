@@ -1,5 +1,5 @@
 import axiosInstance from '../../common/config/axios.config'
-import type { Server, CreateServerRequest, UpdateServerRequest } from './servers.interface'
+import type { Server, ServerSecrets, CreateServerRequest, UpdateServerRequest } from './servers.interface'
 import type { ApiResponse } from '../../common/interfaces/api.interface'
 
 export const getServersApi = async (page = 1, limit = 20): Promise<Server[]> => {
@@ -28,8 +28,12 @@ export const deleteServerApi = async (id: string): Promise<void> => {
     await axiosInstance.delete(`/servers/${id}`)
 }
 
-export const regenerateAgentTokenApi = async (id: string): Promise<{ agentToken: string }> => {
-    const response = await axiosInstance.post<ApiResponse<{ agentToken: string }>>(`/servers/${id}/regenerate-token`)
+/**
+ * Verify the server password. Returns the agentToken and install script on success.
+ * Throws a 401 error if the password is incorrect.
+ */
+export const verifyServerPasswordApi = async (id: string, password: string): Promise<ServerSecrets> => {
+    const response = await axiosInstance.post<ApiResponse<ServerSecrets>>(`/servers/${id}/verify-password`, { password })
     return response.data.data
 }
 

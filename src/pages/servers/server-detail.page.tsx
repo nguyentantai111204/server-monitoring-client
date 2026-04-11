@@ -2,11 +2,17 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
     Box, Stack, Typography, Card, CardContent, Chip,
-    Button, Skeleton, Divider,
-    CircularProgress,
+    Button, Skeleton, Divider, CircularProgress,
+    Dialog, DialogTitle, DialogContent, DialogActions,
+    TextField, InputAdornment, IconButton, Alert,
 } from '@mui/material'
-import { ArrowBack, ContentCopy, SystemUpdateAlt, People, Refresh } from '@mui/icons-material'
+import {
+    ArrowBack, People, Refresh,
+    Lock, LockOpen, ContentCopy, Visibility, VisibilityOff,
+    SystemUpdateAlt,
+} from '@mui/icons-material'
 import { getServerByIdApi, killProcessApi, updateAgentApi } from '../../apis/servers/servers.api'
+import { verifyServerPasswordApi } from '../../apis/servers/servers.api'
 import { getLatestMetricApi, getMetricsApi } from '../../apis/metrics/metrics.api'
 import { getCommandByIdApi, requestActiveUsersApi } from '../../apis/commands/commands.api'
 import { CommandStatus } from '../../common/enums/command-status.enum'
@@ -17,24 +23,154 @@ import { showSnackbar } from '../../redux/system/system.slice'
 import { MetricChartComponent } from './components/metric-chart.component'
 import { MetricBar } from '../../components/metrics/metric-bar.component'
 import { ProcessTable } from './components/process-table.component'
+import type { ServerSecrets } from '../../apis/servers/servers.interface'
 
+// ─── Password Dialog ──────────────────────────────────────────────────────────
+
+interface PasswordDialogProps {
+    open: boolean
+    serverId: string
+    onSuccess: (secrets: ServerSecrets) => void
+    onClose: () => void
+}
+
+const PasswordDialog = ({ open, serverId, onSuccess, onClose }: PasswordDialogProps) => {
+    const [password, setPassword] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    const handleClose = () => {
+        setPassword('')
+        setError('')
+        setLoading(false)
+        onClose()
+    }
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!password) return
+        setLoading(true)
+        setError('')
+        try {
+            const secrets = await verifyServerPasswordApi(serverId, password)
+            handleClose()
+            onSuccess(secrets)
+        } catch {
+            setError('Incorrect password. Please try again.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
+            <form onSubmit={handleSubmit}>
+                <DialogTitle>🔒 Verify Server Password</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" mb={2}>
+                        Enter this server's password to reveal the agent token and install command.
+                    </Typography>
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                    <TextField
+                        fullWidth autoFocus label="Server Password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        InputProps={{
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <IconButton size="small" onClick={() => setShowPassword(p => !p)}>
+                                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                                    </IconButton>
+                                </InputAdornment>
+                            ),
+                        }}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={handleClose}>Cancel</Button>
+                    <Button type="submit" variant="contained" disabled={loading || !password}>
+                        {loading ? <CircularProgress size={18} color="inherit" /> : 'Reveal'}
+                    </Button>
+                </DialogActions>
+            </form>
+        </Dialog>
+    )
+}
+
+// ─── Locked Secret Row ────────────────────────────────────────────────────────
+
+interface LockedRowProps {
+    label: string
+    secrets: ServerSecrets | null
+    value: (s: ServerSecrets) => string
+    onLockClick: () => void
+    dispatch: ReturnType<typeof useAppDispatch>
+}
+
+const LockedRow = ({ label, secrets, value, onLockClick, dispatch }: LockedRowProps) => {
+    const revealed = !!secrets
+    const text = revealed ? value(secrets!) : null
+
+    const handleCopy = () => {
+        if (!text) return
+        navigator.clipboard.writeText(text)
+        dispatch(showSnackbar({ message: `${label} copied!`, severity: 'info' }))
+    }
+
+    return (
+        <Box>
+            <Typography variant="body2" color="text.secondary" mb={0.5}>{label}</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {revealed ? (
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            fontFamily: 'monospace',
+                            bgcolor: 'action.hover',
+                            px: 1, py: 0.5, borderRadius: 1,
+                            wordBreak: 'break-all', flexGrow: 1,
+                        }}
+                    >
+                        {text}
+                    </Typography>
+                ) : (
+                    <Typography variant="caption" color="text.disabled" sx={{ flexGrow: 1 }}>
+                        •••••• (locked)
+                    </Typography>
+                )}
+                {revealed ? (
+                    <Button size="small" startIcon={<ContentCopy />} onClick={handleCopy}>Copy</Button>
+                ) : (
+                    <Button size="small" startIcon={<Lock />} onClick={onLockClick}>Reveal</Button>
+                )}
+            </Box>
+        </Box>
+    )
+}
+
+// ─── Page Component ───────────────────────────────────────────────────────────
 
 export const ServerDetailPage = () => {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const dispatch = useAppDispatch()
+
     const [killingPid, setKillingPid] = useState<number | null>(null)
     const [isUpdating, setIsUpdating] = useState(false)
     const [activeUsersCommandId, setActiveUsersCommandId] = useState<string | null>(null)
     const [isFetchingUsers, setIsFetchingUsers] = useState(false)
+    const [secrets, setSecrets] = useState<ServerSecrets | null>(null)
+    const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
 
     const { data: server, isLoading: loadingServer, mutate: mutateServer } = useSWR(
         id ? `/servers/${id}` : null,
         () => getServerByIdApi(id as string),
         {
             refreshInterval: 30000,
-            onError: () => dispatch(showSnackbar({ message: 'Failed to load server data', severity: 'error' }))
-        }
+            onError: () => dispatch(showSnackbar({ message: 'Failed to load server data', severity: 'error' })),
+        },
     )
 
     const isOffline = server?.status === 'OFFLINE'
@@ -42,13 +178,13 @@ export const ServerDetailPage = () => {
     const { data: metric } = useSWR(
         id ? `/metrics/${id}/latest` : null,
         () => getLatestMetricApi(id as string).catch(() => null),
-        { refreshInterval: isOffline ? 0 : 10000 }
+        { refreshInterval: isOffline ? 0 : 10000 },
     )
 
     const { data: history } = useSWR(
         id ? `/metrics/${id}/history` : null,
         () => getMetricsApi(id as string, { limit: 20 }).then(res => res ? (Array.isArray(res) ? res : res.data) : []),
-        { refreshInterval: isOffline ? 0 : 10000 }
+        { refreshInterval: isOffline ? 0 : 10000 },
     )
 
     // Polling for active users command result
@@ -56,22 +192,17 @@ export const ServerDetailPage = () => {
         activeUsersCommandId ? `/commands/${activeUsersCommandId}` : null,
         () => getCommandByIdApi(activeUsersCommandId as string),
         {
-            refreshInterval: (data) => (data?.status === CommandStatus.PENDING || data?.status === CommandStatus.PROCESSING) ? 2000 : 0,
+            refreshInterval: (data) =>
+                data?.status === CommandStatus.PENDING || data?.status === CommandStatus.PROCESSING ? 2000 : 0,
             onSuccess: (data) => {
                 if (data?.status === CommandStatus.SUCCESS || data?.status === CommandStatus.FAILED) {
                     setIsFetchingUsers(false)
                 }
-            }
-        }
+            },
+        },
     )
 
     const loading = loadingServer && !server
-
-    const copyToken = () => {
-        if (!server) return
-        navigator.clipboard.writeText(server.agentToken)
-        dispatch(showSnackbar({ message: 'Agent token copied!', severity: 'info' }))
-    }
 
     const handleKill = async (pid: number) => {
         if (!id) return
@@ -127,26 +258,26 @@ export const ServerDetailPage = () => {
 
     return (
         <Box>
-            <Button startIcon={<ArrowBack />} onClick={() => navigate('/servers')} sx={{ mb: 2 }}>
-                Back
-            </Button>
+            <Button startIcon={<ArrowBack />} onClick={() => navigate('/servers')} sx={{ mb: 2 }}>Back</Button>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
                 <Typography variant="h4" fontWeight={700}>{server.name}</Typography>
                 <Chip label={server.status} color={getStatusColor(server.status)} />
             </Box>
 
             <Stack direction={{ xs: 'column', md: 'row' }} gap={2.5} alignItems="flex-start">
-                {/* Server Info */}
+                {/* ─── Server Info ──────────────────────────────────────────────── */}
                 <Box sx={{ flex: '0 0 auto', width: { xs: '100%', md: '40%' } }}>
                     <Card>
                         <CardContent>
                             <Typography variant="h6" fontWeight={600} mb={2}>Server Info</Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <Typography variant="body2" color="text.secondary">IP Address</Typography>
                                     <Typography variant="body2">{server.ipAddress || '—'}</Typography>
                                 </Box>
                                 <Divider />
+
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <Typography variant="body2" color="text.secondary">Last Heartbeat</Typography>
                                     <Typography variant="body2">
@@ -154,32 +285,42 @@ export const ServerDetailPage = () => {
                                     </Typography>
                                 </Box>
                                 <Divider />
-                                <Box>
-                                    <Typography variant="body2" color="text.secondary" mb={0.5}>Agent Token</Typography>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Typography
-                                            variant="caption"
-                                            sx={{
-                                                fontFamily: 'monospace',
-                                                bgcolor: 'action.hover',
-                                                px: 1, py: 0.5, borderRadius: 1,
-                                                wordBreak: 'break-all', flexGrow: 1,
-                                            }}
-                                        >
-                                            {server.agentToken}
-                                        </Typography>
-                                        <Button size="small" startIcon={<ContentCopy />} onClick={copyToken}>
-                                            Copy
-                                        </Button>
-                                    </Box>
-                                </Box>
+
+                                {/* Agent Token — locked */}
+                                <LockedRow
+                                    label="Agent Token"
+                                    secrets={secrets}
+                                    value={(s) => s.agentToken}
+                                    onLockClick={() => setPasswordDialogOpen(true)}
+                                    dispatch={dispatch}
+                                />
+                                <Divider />
+
+                                {/* Install Command — locked */}
+                                <LockedRow
+                                    label="Install Command"
+                                    secrets={secrets}
+                                    value={(s) => s.oneLinerScript}
+                                    onLockClick={() => setPasswordDialogOpen(true)}
+                                    dispatch={dispatch}
+                                />
+
+                                {secrets && (
+                                    <Button
+                                        size="small"
+                                        startIcon={<LockOpen />}
+                                        color="success"
+                                        onClick={() => setSecrets(null)}
+                                        sx={{ alignSelf: 'flex-end', mt: -0.5 }}
+                                    >
+                                        Lock again
+                                    </Button>
+                                )}
+
                                 <Divider />
                                 <Box sx={{ pt: 0.5 }}>
                                     <Button
-                                        fullWidth
-                                        variant="outlined"
-                                        color="warning"
-                                        size="small"
+                                        fullWidth variant="outlined" color="warning" size="small"
                                         startIcon={isUpdating ? <CircularProgress size={14} color="inherit" /> : <SystemUpdateAlt />}
                                         disabled={isUpdating}
                                         onClick={handleUpdateAgent}
@@ -193,7 +334,7 @@ export const ServerDetailPage = () => {
                     </Card>
                 </Box>
 
-                {/* Latest Metrics */}
+                {/* ─── Latest Metrics ───────────────────────────────────────────── */}
                 <Box sx={{ flex: 1, width: { xs: '100%', md: 'auto' } }}>
                     <Card>
                         <CardContent>
@@ -214,15 +355,11 @@ export const ServerDetailPage = () => {
                                     <Stack direction="row" gap={4}>
                                         <Box>
                                             <Typography variant="caption" color="text.secondary">Network In</Typography>
-                                            <Typography variant="body2" fontWeight={500}>
-                                                {formatBytes(metric.networkIn)}/s
-                                            </Typography>
+                                            <Typography variant="body2" fontWeight={500}>{formatBytes(metric.networkIn)}/s</Typography>
                                         </Box>
                                         <Box>
                                             <Typography variant="caption" color="text.secondary">Network Out</Typography>
-                                            <Typography variant="body2" fontWeight={500}>
-                                                {formatBytes(metric.networkOut)}/s
-                                            </Typography>
+                                            <Typography variant="body2" fontWeight={500}>{formatBytes(metric.networkOut)}/s</Typography>
                                         </Box>
                                     </Stack>
                                 </>
@@ -236,41 +373,31 @@ export const ServerDetailPage = () => {
                 </Box>
             </Stack>
 
-            {/* Monitoring Charts */}
+            {/* ─── Monitoring Charts ────────────────────────────────────────────── */}
             {history && history.length > 0 && (
                 <Box mt={3}>
                     <Stack direction={{ xs: 'column', lg: 'row' }} gap={2.5}>
                         <Box sx={{ flex: 1 }}>
-                            <MetricChartComponent
-                                data={history}
-                                title="System Usage History"
-                                type="usage"
-                            />
+                            <MetricChartComponent data={history} title="System Usage History" type="usage" />
                         </Box>
                         <Box sx={{ flex: 1 }}>
-                            <MetricChartComponent
-                                data={history}
-                                title="Network Traffic"
-                                type="network"
-                            />
+                            <MetricChartComponent data={history} title="Network Traffic" type="network" />
                         </Box>
                     </Stack>
                 </Box>
             )}
 
-            {/* User Sessions Monitoring */}
+            {/* ─── User Sessions Monitoring ─────────────────────────────────────── */}
             <Box mt={3}>
                 <Card>
                     <CardContent>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <People color="primary" />
-                                <Typography variant="h6" fontWeight={600}>
-                                    System Users
-                                </Typography>
+                                <Typography variant="h6" fontWeight={600}>System Users</Typography>
                             </Box>
-                            <Button 
-                                size="small" 
+                            <Button
+                                size="small"
                                 startIcon={isFetchingUsers ? <CircularProgress size={14} color="inherit" /> : <Refresh />}
                                 onClick={handleFetchUsers}
                                 disabled={isFetchingUsers || isOffline}
@@ -280,15 +407,9 @@ export const ServerDetailPage = () => {
                         </Box>
 
                         {userCommand?.status === CommandStatus.SUCCESS ? (
-                            <Box sx={{ 
-                                bgcolor: 'grey.900', 
-                                color: 'grey.100', 
-                                p: 2, 
-                                borderRadius: 1, 
-                                fontFamily: 'monospace',
-                                fontSize: '0.875rem',
-                                whiteSpace: 'pre-wrap',
-                                minHeight: 60
+                            <Box sx={{
+                                bgcolor: 'grey.900', color: 'grey.100', p: 2, borderRadius: 1,
+                                fontFamily: 'monospace', fontSize: '0.875rem', whiteSpace: 'pre-wrap', minHeight: 60,
                             }}>
                                 {userCommand.resultLog || 'No system users found.'}
                             </Box>
@@ -312,26 +433,29 @@ export const ServerDetailPage = () => {
                 </Card>
             </Box>
 
-            {/* Process Manager */}
+            {/* ─── Process Manager ──────────────────────────────────────────────── */}
             <Box mt={3}>
                 <Card>
                     <CardContent>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                            <Typography variant="h6" fontWeight={600}>
-                                Process Manager
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                Top 15 by CPU · refreshes every 30s
-                            </Typography>
+                            <Typography variant="h6" fontWeight={600}>Process Manager</Typography>
+                            <Typography variant="caption" color="text.secondary">Top 15 by CPU · refreshes every 30s</Typography>
                         </Box>
-                        <ProcessTable 
-                            processes={processes} 
-                            killingPid={killingPid} 
-                            onKill={handleKill} 
-                        />
+                        <ProcessTable processes={processes} killingPid={killingPid} onKill={handleKill} />
                     </CardContent>
                 </Card>
             </Box>
+
+            {/* ─── Password Dialog ──────────────────────────────────────────────── */}
+            <PasswordDialog
+                open={passwordDialogOpen}
+                serverId={id as string}
+                onSuccess={(unlocked) => {
+                    setSecrets(unlocked)
+                    dispatch(showSnackbar({ message: 'Secrets unlocked successfully', severity: 'success' }))
+                }}
+                onClose={() => setPasswordDialogOpen(false)}
+            />
         </Box>
     )
 }

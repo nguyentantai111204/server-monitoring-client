@@ -13,7 +13,6 @@ export interface Server {
     ownerId: string
     name: string
     ipAddress?: string
-    agentToken: string
     status: ServerStatus
     lastHeartbeat?: string
     topProcesses?: ProcessInfo[] | null
@@ -21,9 +20,16 @@ export interface Server {
     updatedAt: string
 }
 
+/** Returned by POST /servers/:id/verify-password on success */
+export interface ServerSecrets {
+    agentToken: string
+    oneLinerScript: string
+}
+
 export interface CreateServerRequest {
     name: string
     ipAddress?: string
+    password: string
 }
 
 export interface UpdateServerRequest {

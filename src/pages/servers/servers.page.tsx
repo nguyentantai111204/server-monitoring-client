@@ -2,9 +2,9 @@ import { useState } from 'react'
 import {
     Box, Stack, Typography, Button, Card, CardContent,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, Skeleton, IconButton, Tooltip
+    TextField, Skeleton, IconButton, Tooltip, InputAdornment,
 } from '@mui/material'
-import { Add, Refresh } from '@mui/icons-material'
+import { Add, Refresh, Visibility, VisibilityOff } from '@mui/icons-material'
 import { useFormik } from 'formik'
 import * as Yup from 'yup'
 import { getServersApi, createServerApi } from '../../apis/servers/servers.api'
@@ -16,23 +16,35 @@ import { ServerCard } from './components/server-card.component'
 const validationSchema = Yup.object({
     name: Yup.string().required('Server name is required'),
     ipAddress: Yup.string().optional(),
+    password: Yup.string().required('Password is required').min(4, 'Password must be at least 4 characters'),
+    confirmPassword: Yup.string()
+        .required('Please confirm your password')
+        .oneOf([Yup.ref('password')], 'Passwords do not match'),
 })
 
 export const ServersPage = () => {
     const dispatch = useAppDispatch()
-    const { data: servers = [], isLoading: loading, mutate: mutateServers } = useSWR('/servers', () => getServersApi(), {
-        onError: () => dispatch(showSnackbar({ message: 'Failed to load servers', severity: 'error' }))
-    })
+    const { data: servers = [], isLoading: loading, mutate: mutateServers } = useSWR(
+        '/servers',
+        () => getServersApi(),
+        { onError: () => dispatch(showSnackbar({ message: 'Failed to load servers', severity: 'error' })) },
+    )
     const [dialogOpen, setDialogOpen] = useState(false)
     const [creating, setCreating] = useState(false)
+    const [showPassword, setShowPassword] = useState(false)
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
     const formik = useFormik({
-        initialValues: { name: '', ipAddress: '' },
+        initialValues: { name: '', ipAddress: '', password: '', confirmPassword: '' },
         validationSchema,
         onSubmit: async (values, { resetForm }) => {
             setCreating(true)
             try {
-                await createServerApi({ name: values.name, ipAddress: values.ipAddress || undefined })
+                await createServerApi({
+                    name: values.name,
+                    ipAddress: values.ipAddress || undefined,
+                    password: values.password,
+                })
                 dispatch(showSnackbar({ message: 'Server created successfully', severity: 'success' }))
                 setDialogOpen(false)
                 resetForm()
@@ -45,9 +57,9 @@ export const ServersPage = () => {
         },
     })
 
-    const copyToken = (token: string) => {
-        navigator.clipboard.writeText(token)
-        dispatch(showSnackbar({ message: 'Token copied!', severity: 'info' }))
+    const handleCloseDialog = () => {
+        setDialogOpen(false)
+        formik.resetForm()
     }
 
     return (
@@ -71,16 +83,12 @@ export const ServersPage = () => {
                 {loading
                     ? Array.from({ length: 6 }).map((_, i) => (
                         <Box key={i} sx={{ flex: '1 1 280px', minWidth: 240 }}>
-                            <Skeleton variant="rounded" height={140} />
+                            <Skeleton variant="rounded" height={160} />
                         </Box>
                     ))
                     : servers.map((server) => (
                         <Box key={server.id} sx={{ flex: '1 1 280px', minWidth: 240 }}>
-                            <ServerCard 
-                                server={server} 
-                                onCopyToken={copyToken}
-                                onCopyInstallCmd={(token) => copyToken(`curl -sSL https://ubuntu-server-management.duckdns.org/scripts/install.sh | sudo bash -s -- -t ${token} -u https://ubuntu-server-management.duckdns.org`)}
-                            />
+                            <ServerCard server={server} />
                         </Box>
                     ))}
 
@@ -98,24 +106,67 @@ export const ServersPage = () => {
                 )}
             </Stack>
 
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+            {/* ─── Add Server Dialog ─────────────────────────────────────────────── */}
+            <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="xs" fullWidth>
                 <form onSubmit={formik.handleSubmit}>
                     <DialogTitle>Add New Server</DialogTitle>
                     <DialogContent sx={{ pt: 1 }}>
+                        {/* Server Name */}
                         <TextField
                             fullWidth autoFocus label="Server Name" name="name" sx={{ mb: 2, mt: 1 }}
                             value={formik.values.name} onChange={formik.handleChange} onBlur={formik.handleBlur}
                             error={formik.touched.name && Boolean(formik.errors.name)}
                             helperText={formik.touched.name && formik.errors.name}
                         />
+
+                        {/* IP Address */}
                         <TextField
-                            fullWidth label="IP Address (optional)" name="ipAddress"
+                            fullWidth label="IP Address (optional)" name="ipAddress" sx={{ mb: 2 }}
                             value={formik.values.ipAddress} onChange={formik.handleChange} onBlur={formik.handleBlur}
                             helperText="Leave blank to auto-detect from agent"
                         />
+
+                        {/* Password */}
+                        <TextField
+                            fullWidth label="Server Password" name="password" sx={{ mb: 2 }}
+                            type={showPassword ? 'text' : 'password'}
+                            value={formik.values.password} onChange={formik.handleChange} onBlur={formik.handleBlur}
+                            error={formik.touched.password && Boolean(formik.errors.password)}
+                            helperText={
+                                (formik.touched.password && formik.errors.password) ||
+                                'Required to view the agent token and install command later'
+                            }
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton size="small" onClick={() => setShowPassword(p => !p)}>
+                                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+
+                        {/* Confirm Password */}
+                        <TextField
+                            fullWidth label="Confirm Password" name="confirmPassword"
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            value={formik.values.confirmPassword} onChange={formik.handleChange} onBlur={formik.handleBlur}
+                            error={formik.touched.confirmPassword && Boolean(formik.errors.confirmPassword)}
+                            helperText={formik.touched.confirmPassword && formik.errors.confirmPassword}
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton size="small" onClick={() => setShowConfirmPassword(p => !p)}>
+                                            {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2 }}>
-                        <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCloseDialog}>Cancel</Button>
                         <Button type="submit" variant="contained" disabled={creating}>
                             {creating ? 'Creating…' : 'Create'}
                         </Button>
