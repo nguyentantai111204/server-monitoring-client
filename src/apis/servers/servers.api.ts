@@ -24,8 +24,8 @@ export const updateServerApi = async (id: string, data: UpdateServerRequest): Pr
     return response.data.data
 }
 
-export const deleteServerApi = async (id: string): Promise<void> => {
-    await axiosInstance.delete(`/servers/${id}`)
+export const deleteServerApi = async (id: string, password: string): Promise<void> => {
+    await axiosInstance.delete(`/servers/${id}`, { data: { password } })
 }
 
 /**
