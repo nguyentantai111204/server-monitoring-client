@@ -4,6 +4,7 @@ import { ServersPage } from '../pages/servers/servers.page'
 import { AlertsPage } from '../pages/alerts/alerts.page'
 import { ProfilePage } from '../pages/user/profile.page'
 import { ServerDetailPage } from '@/pages/servers/server-detail.page'
+import { UsersManagementPage } from '../pages/user/users-management.page'
 
 export const mainRoutes: RouteObject[] = [
     { index: true, element: <DashboardPage /> },
@@ -11,4 +12,5 @@ export const mainRoutes: RouteObject[] = [
     { path: 'servers/:id', element: <ServerDetailPage /> },
     { path: 'alerts', element: <AlertsPage /> },
     { path: 'profile', element: <ProfilePage /> },
+    { path: 'users', element: <UsersManagementPage /> },
 ]

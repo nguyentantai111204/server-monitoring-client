@@ -4,15 +4,18 @@ import {
     ListItemIcon, ListItemText, Typography, Divider
 } from '@mui/material'
 import {
-    Dashboard, Storage, NotificationsActive, Person, Monitor
+    Dashboard, Storage, NotificationsActive, Person, Monitor, People
 } from '@mui/icons-material'
 import { SIDEBAR_WIDTH } from '../../common/constants/style.constant'
+import { useAppSelector } from '../../redux/store.redux'
+import { selectCurrentUser } from '../../redux/account/account.selectors'
 
 const NAV_ITEMS = [
     { label: 'Dashboard', path: '/', icon: <Dashboard /> },
     { label: 'Servers', path: '/servers', icon: <Storage /> },
     { label: 'Alert Rules', path: '/alerts', icon: <NotificationsActive /> },
     { label: 'Profile', path: '/profile', icon: <Person /> },
+    { label: 'Users', path: '/users', icon: <People />, adminOnly: true },
 ]
 
 interface SidebarLayoutProps {
@@ -23,6 +26,9 @@ interface SidebarLayoutProps {
 const SidebarContent = () => {
     const location = useLocation()
     const navigate = useNavigate()
+    const user = useAppSelector(selectCurrentUser)
+
+    const filteredNavItems = NAV_ITEMS.filter(item => !item.adminOnly || user?.role === 'ADMIN')
 
     const isActive = (path: string) =>
         path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
@@ -64,7 +70,7 @@ const SidebarContent = () => {
 
             {/* Nav Items */}
             <List sx={{ px: 1.5, py: 2, flexGrow: 1 }}>
-                {NAV_ITEMS.map((item) => {
+                {filteredNavItems.map((item) => {
                     const active = isActive(item.path)
                     return (
                         <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>

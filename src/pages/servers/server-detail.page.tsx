@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
     Box, Stack, Typography, Card, CardContent, Chip,
-    Button, Skeleton, Divider, CircularProgress,
+    Button, Skeleton, Divider, CircularProgress, IconButton,
 } from '@mui/material'
 import { ArrowBack, People, Refresh } from '@mui/icons-material'
 import { getServerByIdApi, killProcessApi, updateAgentApi } from '../../apis/servers/servers.api'
@@ -13,7 +13,9 @@ import { AlertRulesCard } from './components/alert-rules-card.component'
 import { ServerInfoCard } from './components/server-info-card.component'
 import { MetricChartComponent } from './components/metric-chart.component'
 import { ProcessTable } from './components/process-table.component'
+import { PasswordDialog } from './components/password-dialog.component'
 import { MetricBar } from '../../components/metrics/metric-bar.component'
+import type { ServerSecrets } from '../../apis/servers/servers.interface'
 import useSWR from 'swr'
 import { formatRelative, formatBytes, getStatusColor } from '../../common/utils/format.utils'
 import { useAppDispatch } from '../../redux/store.redux'
@@ -28,6 +30,8 @@ export const ServerDetailPage = () => {
     const [isUpdating, setIsUpdating] = useState(false)
     const [activeUsersCommandId, setActiveUsersCommandId] = useState<string | null>(null)
     const [isFetchingUsers, setIsFetchingUsers] = useState(false)
+    const [secrets, setSecrets] = useState<ServerSecrets | null>(null)
+    const [unlockDialogOpen, setUnlockDialogOpen] = useState(false)
 
     const { data: server, isLoading: loadingServer, mutate: mutateServer } = useSWR(
         id ? `/servers/${id}` : null,
@@ -141,7 +145,7 @@ export const ServerDetailPage = () => {
                             <Typography variant="h6" fontWeight={600} mb={2}>
                                 Latest Metrics
                                 {metric && (
-                                    <Typography component="span" variant="caption" color="text.secondary" ml={1}>
+                                    <Typography variant="caption" color="text.secondary" ml={1}>
                                         ({formatRelative(metric.timestamp)})
                                     </Typography>
                                 )}
@@ -164,14 +168,27 @@ export const ServerDetailPage = () => {
                                     </Stack>
                                 </>
                             ) : (
-                                <Typography color="text.secondary" textAlign="center" py={3}>
-                                    No metrics yet. Install and configure the agent to start sending data.
-                                </Typography>
+                                <Box sx={{ py: 1 }}>
+                                    <Typography color="text.secondary" mb={2}>
+                                        No metrics yet. Install and configure the agent to start sending data.
+                                    </Typography>
+                                    <InstallationGuide
+                                        secrets={secrets}
+                                        onUnlock={() => setUnlockDialogOpen(true)}
+                                    />
+                                </Box>
                             )}
                         </CardContent>
                     </Card>
                 </Box>
             </Stack>
+
+            <PasswordDialog
+                open={unlockDialogOpen}
+                serverId={id as string}
+                onSuccess={setSecrets}
+                onClose={() => setUnlockDialogOpen(false)}
+            />
 
             {/* ─── History Charts ───────────────────────────────────────────────── */}
             {history && history.length > 0 && (
@@ -249,3 +266,64 @@ export const ServerDetailPage = () => {
         </Box>
     )
 }
+
+const InstallationGuide = ({ secrets, onUnlock }: { secrets: ServerSecrets | null; onUnlock: () => void }) => {
+    const dispatch = useAppDispatch()
+
+    const handleCopy = (text: string, label: string) => {
+        navigator.clipboard.writeText(text)
+        dispatch(showSnackbar({ message: `${label} copied!`, severity: 'success' }))
+    }
+
+    return (
+        <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" fontWeight={700} mb={1}>Agent Installation</Typography>
+            <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                Run this command on your server to install and start the monitoring agent.
+            </Typography>
+
+            {secrets ? (
+                <Stack gap={1.5}>
+                    <Box>
+                        <Typography variant="caption" fontWeight={700} gutterBottom>One-liner script</Typography>
+                        <Box sx={{
+                            display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider'
+                        }}>
+                            <Typography variant="caption" sx={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1 }}>
+                                {secrets.oneLinerScript}
+                            </Typography>
+                            <IconButton size="small" onClick={() => handleCopy(secrets.oneLinerScript, 'Install script')}>
+                                <ContentCopy fontSize="inherit" />
+                            </IconButton>
+                        </Box>
+                    </Box>
+                    <Box>
+                        <Typography variant="caption" fontWeight={700} gutterBottom>Agent Token (for manual config)</Typography>
+                        <Box sx={{
+                            display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider'
+                        }}>
+                            <Typography variant="caption" sx={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1 }}>
+                                {secrets.agentToken}
+                            </Typography>
+                            <IconButton size="small" onClick={() => handleCopy(secrets.agentToken, 'Token')}>
+                                <ContentCopy fontSize="inherit" />
+                            </IconButton>
+                        </Box>
+                    </Box>
+                </Stack>
+            ) : (
+                <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<LockOpen />}
+                    onClick={onUnlock}
+                    fullWidth
+                >
+                    Unlock Instructions
+                </Button>
+            )}
+        </Box>
+    )
+}
+
+import { ContentCopy, LockOpen } from '@mui/icons-material'
